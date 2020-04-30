@@ -8,18 +8,19 @@ from torch.utils.data import Dataset
 
 
 class SmashVODFrameDataset(Dataset):
-    def __init__(self, csv_file: str, root_dir: str, transform=None):
-        self.frame_df = pd.read_csv(csv_file)
+    def __init__(
+        self,
+        frame_df: pd.DataFrame,
+        root_dir: str,
+        character_map: dict,
+        transform=None,
+        target_transform=None,
+    ):
+        self.frame_df = frame_df
         self.root_dir = root_dir
         self.transform = transform
-
-        # Build character map
-        all_characters = sorted(
-            pd.concat(
-                [self.frame_df["p1_character"], self.frame_df["p2_character"]]
-            ).unique()
-        )
-        self.character_map = {char: i for i, char in enumerate(all_characters)}
+        self.target_transform = target_transform
+        self.character_map = character_map
 
     def __len__(self):
         return self.frame_df.shape[0]
@@ -30,14 +31,14 @@ class SmashVODFrameDataset(Dataset):
 
         img_name = os.path.join(self.root_dir, self.frame_df.iloc[index, 0])
         image = io.imread(img_name)
-        labels = [0 for _ in range(len(self.character_map))]
+        target = [0 for _ in range(len(self.character_map))]
+        target = torch.Tensor(target)
         characters = self.frame_df.iloc[index, 1:]
         for character in characters:
-            labels[self.character_map[character]] = 1
-        labels = np.array(labels)
+            target[self.character_map[character]] = 1
 
-        sample = {"image": image, "labels": labels}
-        if self.transform:
-            sample = self.transform(sample)
-
-        return sample
+        if self.transform is not None:
+            image = self.transform(image)
+        if self.target_transform is not None:
+            target = self.target_transform(target)
+        return image, target
