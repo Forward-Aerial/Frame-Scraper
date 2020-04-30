@@ -2,3 +2,5 @@ test
 records.csv
 character_map.json
 geckodriver.log
+.ipynb_checkpoints
+__pycache__

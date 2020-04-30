@@ -1,11 +1,10 @@
-from torchvision import models
+import os
+
+import numpy as np
 import pandas as pd
 import torch
-from torch.utils.data import DataLoader, Dataset
-import os
 from skimage import io, transform
-from torchvision import transforms
-import numpy as np
+from torch.utils.data import Dataset
 
 
 class SmashVODFrameDataset(Dataset):
@@ -42,45 +41,3 @@ class SmashVODFrameDataset(Dataset):
             sample = self.transform(sample)
 
         return sample
-
-class ToTensor(object):
-    """Convert ndarrays in sample to Tensors."""
-
-    def __call__(self, sample):
-        image, labels = sample['image'], sample['labels']
-
-        # swap color axis because
-        # numpy image: H x W x C
-        # torch image: C X H X W
-        image = image.transpose((2, 0, 1))
-        return {'image': torch.from_numpy(image),
-                'labels': torch.from_numpy(labels)}
-
-
-# Test Dataset
-vod_frame_dataset = SmashVODFrameDataset("records.csv", ".", transform=transforms.Compose([ToTensor()]))
-for i in range(len(vod_frame_dataset)):
-    sample = vod_frame_dataset[i]
-
-    print(i, sample['image'].shape, sample['labels'].shape)
-    
-    if i == 5:
-        break
-
-
-model = models.vgg16(pretrained=True)
-
-# Freeze model weights
-for param in model.parameters():
-    param.requires_grad = False
-
-import torch.nn as nn
-
-# Add on classifier
-model.classifier[6] = nn.Sequential(
-    nn.Linear(n_inputs, 256),
-    nn.ReLU(),
-    nn.Dropout(0.4),
-    nn.Linear(256, n_classes),
-    nn.LogSoftmax(dim=1),
-)
