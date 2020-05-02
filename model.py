@@ -101,7 +101,9 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
 
                 # statistics
                 running_loss += loss.item() * inputs.size(0)
-                running_corrects += torch.sum(torch.Tensor([len(character_map)]).cuda() - num_incorrect)
+                running_corrects += torch.sum(
+                    torch.Tensor([len(character_map)]).cuda() - num_incorrect
+                )
             if phase == "train":
                 scheduler.step()
 
