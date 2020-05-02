@@ -27,7 +27,6 @@ def download_video(
         with youtube_dl.YoutubeDL(YOUTUBE_DL_OPTS) as ydl:
             info_dict = ydl.extract_info(youtube_link, download=True)
             filename = ydl.prepare_filename(info_dict)
-            # ydl.download([youtube_link])
             subprocess.check_call(
                 ["echo", "youtube-dl", "-F", FORMAT, "-o", OUTTMPL, youtube_link]
             )
@@ -57,7 +56,7 @@ def split_video(
         ]
     )
     os.remove(filename)
-    created_frames = glob.glob(f"test/{filename.split('/')[-1].split('.')[0]}*")
+    created_frames = glob.glob(f"test/{filename.split('/')[-1].split('.')[0]}*.jpg")
     if len(created_frames) > MAX_FRAMES:
         selected_frames = random.sample(created_frames, MAX_FRAMES)
         excess_frames = filter(lambda x: x not in selected_frames, created_frames)
