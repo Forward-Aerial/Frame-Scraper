@@ -16,7 +16,7 @@ from torch.optim import lr_scheduler
 from torchvision import datasets, models, transforms
 
 # %%
-BATCH_SIZE = 16
+BATCH_SIZE = 64
 
 # %%
 
@@ -76,8 +76,12 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
             running_loss = 0.0
             running_corrects = 0
 
+            progress = 0
             # Iterate over data.
             for inputs, labels in dataloaders[phase]:
+                progress += len(inputs)
+                if progress % 3200 == 0:
+                    print(progress, "/", dataset_sizes[phase])
                 inputs = inputs.to(device)
                 labels = labels.to(device)
 

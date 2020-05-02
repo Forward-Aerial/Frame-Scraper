@@ -11,13 +11,11 @@ import pandas as pd
 import youtube_dl
 
 FORMAT = "243"
-OUTTMPL = "test/%(id)s.%(ext)s"
+OUTTMPL = "data/videos/%(id)s.%(ext)s"
 YOUTUBE_DL_OPTS = {"format": FORMAT, "outtmpl": OUTTMPL}
 
 FRAMES_TO_GRAB_PER_SEC = 0.1
 MAX_FRAMES = 100
-MAX_VODS_PER_CHARACTER = 20
-pd.set_option("max_rows", None)
 MAX_RETRIES = 10
 NUM_PROCESSES = 10
 
