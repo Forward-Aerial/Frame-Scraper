@@ -76,7 +76,7 @@ def split_video_args(args: Tuple[str, str, str]):
 
 with open("vods.csv", "r") as read_csvfile:
     reader = csv.reader(read_csvfile)
-    next(reader)  # Skip header row
+    header_row = next(reader)  # Skip header row
     i = 0
     with open("records.csv", "w+") as write_csvfile:
         writer = csv.writer(write_csvfile)
@@ -87,5 +87,6 @@ with open("vods.csv", "r") as read_csvfile:
                 download_results.append(download_result)
 
             split_tasks = pool.imap_unordered(split_video_args, download_results)
+            writer.writerow(header_row)
             for result in split_tasks:
                 writer.writerows(result)
