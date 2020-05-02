@@ -11,7 +11,7 @@ import pandas as pd
 import youtube_dl
 
 FORMAT = "243"
-OUTTMPL = "data/videos/%(id)s.%(ext)s"
+OUTTMPL = "test/%(id)s.%(ext)s"
 YOUTUBE_DL_OPTS = {"format": FORMAT, "outtmpl": OUTTMPL}
 
 FRAMES_TO_GRAB_PER_SEC = 0.1
