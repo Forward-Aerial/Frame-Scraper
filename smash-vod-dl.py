@@ -2,13 +2,18 @@ import re
 import subprocess
 from typing import List, Tuple
 
-from selenium.common.exceptions import NoSuchElementException
-from selenium import webdriver
-from selenium.webdriver.common.keys import Keys
-from selenium.webdriver.firefox.webelement import FirefoxWebElement
-import youtube_dl
 import bs4
 import pandas as pd
+import youtube_dl
+from selenium import webdriver
+from selenium.common.exceptions import NoSuchElementException
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.firefox.webelement import FirefoxWebElement
+
+ULTIMATE = "ultimate"
+MELEE = "melee"
+PROJECT_M = "projectm"
+N64 = "smash64"
 
 SPRITE_FILENAME_PATTERN = re.compile(r"16px-(?P<charname>.*)$")
 
@@ -54,24 +59,24 @@ def get_data_for_page(
     return results
 
 
-def get_all_data():
+def get_all_data(game: str):
     driver = webdriver.Firefox()
     try:
         i = 0
         all_results = []
         while page_results := get_data_for_page(
-            driver, f"https://vods.co/ultimate?page={i}"
+            driver, f"https://vods.co/{game}?page={i}"
         ):
             i += 1
             all_results += page_results
             df = pd.DataFrame.from_records(
                 all_results, columns=["youtube_link", "p1_character", "p2_character"]
             )
-            df.to_csv("vods.csv", index=False)
+            df.to_csv(f"{game}-vods.csv", index=False)
     except Exception as e:
         raise e
     finally:
         driver.close()
 
 
-get_all_data()
+get_all_data(game=MELEE)
