@@ -5,6 +5,7 @@ import multiprocessing
 import re
 import urllib
 from typing import Callable, List, NamedTuple, Optional
+import csv
 
 import aiohttp
 import bs4
@@ -131,7 +132,6 @@ async def fetch_data_for_vod_page(
     """
     Makes a request to the provided https://vods.co page.
     """
-    return [("abcd", ["1", "2", "3"])]
     html = await fetch(session, url)
     rows = bs4.BeautifulSoup(html, "lxml").select("tr > td:nth-child(2) > a")
     vod_entries: List[Optional[VODEntry]] = await asyncio.gather(
@@ -162,6 +162,20 @@ async def get_page_limit_for(game: str) -> int:
         return int(query_dict["page"][0])
 
 
+async def consumer(queue: asyncio.Queue, session: aiohttp.ClientSession, writer):
+    """
+    An asynchronous consumer. Takes URLs from the provided queue, and then makes requests using them.
+    The `writer` parameter is for the return type of `csv.writer`.
+    """
+    while True:
+        page_url = await queue.get()
+        vod_entries: List[VODEntry] = await fetch_data_for_vod_page(session, page_url)
+        for (link, characters) in vod_entries:
+            row = [link, *characters]
+            writer.writerow(row)
+        queue.task_done()  # indicate complete task
+
+
 async def fetch_data_for(
     game: str, num_workers: int, upper_page_limit=None
 ) -> List[VODEntry]:
@@ -171,22 +185,23 @@ async def fetch_data_for(
     if upper_page_limit is None:
         upper_page_limit = await get_page_limit_for(game)
 
-    urls = [f"{HOSTNAME}/{game}?page={i}" for i in range(upper_page_limit)]
+    queue = asyncio.Queue()
+    for i in range(upper_page_limit):
+        await queue.put(f"{HOSTNAME}/{game}?page={i}")
+
     async with aiohttp.ClientSession() as session:
-        with concurrent.futures.ThreadPoolExecutor(max_workers=num_workers) as executor:
-            future_to_url = {
-                executor.submit(fetch_data_for_vod_page, session, url): url
-                for url in urls
-            }
-            for future in concurrent.futures.as_completed(future_to_url):
-                url = future_to_url[future]
-                try:
-                    vod_entries = future.result()
-                except Exception as exc:
-                    print(f"{url} generated an exception: {exc}")
-                else:
-                    for (link, characters_used) in vod_entries:
-                        print(link, characters_used)
+        with open(f"{game}-vods.csv", "w+") as csvfile:
+            writer = csv.writer(csvfile)
+            consumers = [
+                asyncio.ensure_future(consumer(queue, session, writer))
+                for _ in range(num_workers)
+            ]
+            await queue.join()  # Wait until the queue is empty
+
+            # Clean up the consumers.
+            print("Finished scraping, wrapping up.")
+            for cons in consumers:
+                cons.cancel()
 
 
 def main():
@@ -202,9 +217,7 @@ def main():
 
     args = parser.parse_args()
     loop = asyncio.get_event_loop()
-    loop.run_until_complete(
-        fetch_data_for(args.game, args.num_workers, upper_page_limit=1)
-    )
+    loop.run_until_complete(fetch_data_for(args.game, args.num_workers))
 
 
 if __name__ == "__main__":
