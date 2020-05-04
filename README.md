@@ -1,5 +1,6 @@
-# smash-vod-dl
-1. `pip install -r requirements.txt`
-1. `python smash-vod-dl.py`
-1. `python process.py`
-1. `python model.py` (model is WIP)
+# Smash VOD DL
+A utility for downloading Super Smash Bros. Videos-On-Demand (VODs) of professional players.
+Sources data from https://vods.co.
+
+## Running Locally
+1. Have Python 3.
