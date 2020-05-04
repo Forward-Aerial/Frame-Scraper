@@ -1,9 +1,13 @@
+import csv
+import multiprocessing
 import re
 import subprocess
+from multiprocessing import dummy
 from typing import List, Tuple
 
 import bs4
 import pandas as pd
+import requests
 import youtube_dl
 from selenium import webdriver
 from selenium.common.exceptions import NoSuchElementException
@@ -17,6 +21,9 @@ N64 = "smash64"
 
 SPRITE_FILENAME_PATTERN = re.compile(r"16px-(?P<charname>.*)$")
 
+NUM_PROCESSES = None
+MAX_RETRIES = 10
+
 
 def parse_character_from_img(vods_co_img: bs4.Tag) -> str:
     src = vods_co_img.attrs["src"]
@@ -25,58 +32,73 @@ def parse_character_from_img(vods_co_img: bs4.Tag) -> str:
     return sprite_filename.group("charname").split(".png")[0]
 
 
-def follow_link(driver: webdriver.Firefox, vod_link: str) -> str:
+def get_data_for_page(link: str, retries=0) -> List[Tuple[str, str, str]]:
     try:
-        driver.get(vod_link)
-        iframe: FirefoxWebElement = driver.find_element_by_id("g1-video")
-        return iframe.get_attribute("src")
-    except NoSuchElementException:
-        return None
+        print("Requesting", link, f"for the {retries+1} time")
+        r = requests.get(link)
+        html = r.text
+        rows = bs4.BeautifulSoup(html, "lxml").select("tr > td:nth-child(2) > a")
+        page_data: List[Tuple[str, str, str]] = []
+        for row in rows:
+            character_sprites: bs4.ResultSet = row.select("span:nth-child(1) > img")
+            if len(character_sprites) != 2:
+                continue
+            a_sprite, b_sprite = map(parse_character_from_img, character_sprites)
+            vod_co_link = row.attrs["href"]
+            page_data.append((vod_co_link, a_sprite, b_sprite))
+        return page_data
+    except requests.exceptions.HTTPError as e:
+        if retries < MAX_RETRIES:
+            return get_data_for_page(link, retries + 1)
+        raise e
+    except ValueError as e:
+        print(link)
+        raise e
 
 
-def get_data_for_page(
-    driver: webdriver.Firefox, link: str
-) -> List[Tuple[str, str, str]]:
-    print(f"Accessing {link}")
-    driver.get(link)
-    html = driver.page_source
-    rows = bs4.BeautifulSoup(html, "lxml").select("tr > td:nth-child(2) > a")
-    results: List[Tuple[str, str, str]] = []
-    if not rows:
-        return None
-    for row in rows:
-        character_sprites: bs4.ResultSet = row.select("span:nth-child(1) > img")
-        if len(character_sprites) == 0:
-            continue
-        if len(character_sprites) > 2:
-            continue
-        a_sprite, b_sprite = map(parse_character_from_img, character_sprites)
-        youtube_link = follow_link(driver, row.attrs["href"])
-        if not youtube_link:
-            continue
-        results.append((youtube_link, a_sprite, b_sprite))
+def fetch_final_data(
+    vod_co_link: str, p1_character: str, p2_character: str, retries=0
+) -> Tuple[str, str, str]:
+    try:
+        r = requests.get(vod_co_link)
+        r.raise_for_status()
+        html = r.text
+        yt_link_anchor = bs4.BeautifulSoup(html, "lxml").select_one("#g1-video")
+        if not yt_link_anchor:
+            return None
+        yt_link = yt_link_anchor.attrs["src"][2:]
+        return yt_link, p1_character, p2_character
+    except requests.exceptions.HTTPError as e:
+        if retries < MAX_RETRIES:
+            return fetch_final_data(
+                vod_co_link, p1_character, p2_character, retries + 1
+            )
+        raise e
 
-    return results
+
+def fetch_final_data_star(args: Tuple[str, str, str]) -> Tuple[str, str, str]:
+    return fetch_final_data(*args)
 
 
 def get_all_data(game: str):
-    driver = webdriver.Firefox()
-    try:
-        i = 0
-        all_results = []
-        while page_results := get_data_for_page(
-            driver, f"https://vods.co/{game}?page={i}"
-        ):
-            i += 1
-            all_results += page_results
-            df = pd.DataFrame.from_records(
-                all_results, columns=["youtube_link", "p1_character", "p2_character"]
+    with multiprocessing.Pool(processes=NUM_PROCESSES) as pool:
+        fetched_data = pool.imap_unordered(
+            get_data_for_page, [f"https://vods.co/{game}?page={i}" for i in range(350)]
+        )
+        all_page_data = []
+        for page_data in fetched_data:
+            all_page_data += page_data
+        print(f"Going to write {len(all_page_data)} rows.")
+        with open(f"{game}-vods.csv", "w+") as csvfile:
+            writer = csv.writer(csvfile)
+            fetched_final_data = pool.imap_unordered(
+                fetch_final_data_star, all_page_data
             )
-            df.to_csv(f"{game}-vods.csv", index=False)
-    except Exception as e:
-        raise e
-    finally:
-        driver.close()
+            writer.writerow(["youtube_link", "p1_character", "p2_character"])
+            for final_data in fetched_final_data:
+                if final_data is None:
+                    continue
+                writer.writerow(final_data)
 
 
 get_all_data(game=MELEE)

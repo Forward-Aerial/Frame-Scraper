@@ -16,7 +16,7 @@ from torch.optim import lr_scheduler
 from torchvision import datasets, models, transforms
 
 # %%
-BATCH_SIZE = 128
+BATCH_SIZE = 64
 
 # %%
 
@@ -33,7 +33,18 @@ vod_dataset = SmashVODFrameDataset(
     ".",
     character_map,
     transform=transforms.Compose(
-        [transforms.ToPILImage(), transforms.Resize(224), transforms.ToTensor()]
+        [
+            transforms.ToPILImage(),
+            transforms.Resize((224, 398)),
+            transforms.RandomOrder(
+                [
+                    transforms.RandomGrayscale(),
+                    transforms.RandomVerticalFlip(),
+                    transforms.RandomHorizontalFlip(),
+                ]
+            ),
+            transforms.ToTensor(),
+        ]
     ),
 )
 
@@ -51,9 +62,8 @@ dataloaders = {
 }
 dataset_sizes = {x: len(frame_dataset) for x, frame_dataset in frame_datasets.items()}
 
-device = torch.device(
-    "cuda:0" if torch.cuda.is_available() else "cpu"
-)  # pylint:disable=no-member
+# pylint:disable=no-member
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 # %%
 def train_model(model, criterion, optimizer, scheduler, num_epochs=3):
@@ -151,17 +161,17 @@ model.classifier[6] = nn.Sequential(
     nn.Linear(256, len(vod_dataset.character_map.keys())),
     nn.Sigmoid(),
 )
-model_ft = model.to(device)
+model = model.to(device)
 
 criterion = nn.BCELoss()
 
 # Observe that all parameters are being optimized
-optimizer_ft = optim.SGD(model_ft.parameters(), lr=0.001, momentum=0.9)
+optimizer_ft = optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
 
 # Decay LR by a factor of 0.1 every 7 epochs
 exp_lr_scheduler = lr_scheduler.StepLR(optimizer_ft, step_size=7, gamma=0.1)
 
 # %%
-model_ft = train_model(model, criterion, optimizer_ft, exp_lr_scheduler, num_epochs=25)
+model_ft = train_model(model, criterion, optimizer_ft, exp_lr_scheduler)
 
 torch.save(model_ft.state_dict(), "best_model.pt")

@@ -10,35 +10,20 @@ from typing import Tuple, List
 import pandas as pd
 import youtube_dl
 
-FORMAT = "243"
+FORMAT = "134"
 OUTTMPL = "test/%(id)s.%(ext)s"
-YOUTUBE_DL_OPTS = {"format": FORMAT, "outtmpl": OUTTMPL}
+YOUTUBE_DL_OPTS = {
+    "format": FORMAT,
+    "outtmpl": OUTTMPL,
+    "external_downloader": "aria2c",
+    "external_downloader_args": ["-c", "-j", "3", "-x", "3", "-s", "3", "-k", "1M"],
+    "youtube_include_dash_manifest": False,
+}
 
-FRAMES_TO_GRAB_PER_SEC = 0.1
+FRAMES_OUTPUT_PER_SEC = 0.1
 MAX_FRAMES = 100
 MAX_RETRIES = 10
-NUM_PROCESSES = 10
-
-
-def download_video(
-    youtube_link: str, p1_character: str, p2_character: str, num_retries=0,
-) -> Tuple[str, str, str]:
-    try:
-        with youtube_dl.YoutubeDL(YOUTUBE_DL_OPTS) as ydl:
-            info_dict = ydl.extract_info(youtube_link, download=True)
-            filename = ydl.prepare_filename(info_dict)
-            subprocess.check_call(
-                ["echo", "youtube-dl", "-F", FORMAT, "-o", OUTTMPL, youtube_link]
-            )
-            return filename, p1_character, p2_character
-    except Exception as e:
-        print("Exception for", youtube_link)
-        if num_retries < MAX_RETRIES:
-            return download_video(
-                youtube_link, p1_character, p2_character, num_retries=num_retries + 1,
-            )
-        else:
-            raise e
+NUM_PROCESSES = None
 
 
 def split_video(
@@ -51,7 +36,10 @@ def split_video(
             "-i",
             filename,
             "-r",
-            f"{FRAMES_TO_GRAB_PER_SEC}",
+            f"{FRAMES_OUTPUT_PER_SEC}",
+            "-loglevel",
+            "quiet",
+            "-stats",
             f"test/{filename.split('/')[-1].split('.')[0]}.%03d.jpg",
         ]
     )
@@ -66,27 +54,49 @@ def split_video(
     return [(frame, p1_character, p2_character) for frame in created_frames]
 
 
-def download_video_args(args: Tuple[str, str, str]):
-    return download_video(*args)
+def download_and_split_video(
+    youtube_link: str, p1_character: str, p2_character: str, num_retries=0,
+) -> Tuple[str, str, str]:
+    try:
+        with youtube_dl.YoutubeDL(YOUTUBE_DL_OPTS) as ydl:
+            info_dict = ydl.extract_info(youtube_link, download=True)
+            filename = ydl.prepare_filename(info_dict)
+            ydl.download([youtube_link])
+            return split_video(filename, p1_character, p2_character)
+    except Exception as e:
+        print("Exception for", youtube_link)
+        print(e)
+        if num_retries < MAX_RETRIES:
+            return download_and_split_video(
+                youtube_link, p1_character, p2_character, num_retries=num_retries + 1,
+            )
+        else:
+            return None
+
+
+def download_and_split_video_args(args: Tuple[str, str, str]):
+    return download_and_split_video(*args)
 
 
 def split_video_args(args: Tuple[str, str, str]):
     return split_video(*args)
 
 
-with open("vods.csv", "r") as read_csvfile:
-    reader = csv.reader(read_csvfile)
-    header_row = next(reader)  # Skip header row
-    i = 0
-    with open("records.csv", "w+") as write_csvfile:
-        writer = csv.writer(write_csvfile)
-        download_results: List[Tuple[str, str, str]] = []
-        with dummy.Pool(NUM_PROCESSES) as pool:
-            download_tasks = pool.imap_unordered(download_video_args, reader)
-            for download_result in download_tasks:
-                download_results.append(download_result)
-
-            split_tasks = pool.imap_unordered(split_video_args, download_results)
+def retrieve_frames(game: str):
+    with open(f"{game}-vods.csv", "r") as read_csvfile:
+        reader = csv.reader(read_csvfile)
+        header_row = next(reader)  # Skip header row
+        with open("records.csv", "w+") as write_csvfile:
+            writer = csv.writer(write_csvfile)
             writer.writerow(header_row)
-            for result in split_tasks:
-                writer.writerows(result)
+            with dummy.Pool(NUM_PROCESSES) as pool:
+                download_and_split_tasks = pool.imap_unordered(
+                    download_and_split_video_args, reader
+                )
+                for result in download_and_split_tasks:
+                    if result is None:
+                        continue
+                    writer.writerows(result)
+
+
+retrieve_frames(game="melee")
