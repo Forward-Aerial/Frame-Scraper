@@ -3,29 +3,13 @@ import asyncio
 import re
 from urllib import parse
 from typing import Callable, List, NamedTuple, Optional
+import logging
 import csv
 
 import aiohttp
 import bs4
 
-SSB_N64 = "n64"
-SSB_MELEE = "melee"
-SSB_MELEE_DOUBLES = "meleedoubles"
-SSB_BRAWL = "brawl"
-SSB_PROJECT_M = "projectm"
-SSB_4 = "smash4"
-SSB_ULTIMATE = "ultimate"
-GAMES = [
-    SSB_N64,
-    SSB_MELEE,
-    SSB_MELEE_DOUBLES,
-    SSB_BRAWL,
-    SSB_PROJECT_M,
-    SSB_4,
-    SSB_ULTIMATE,
-]
-
-MAX_NUM_PLAYERS = 8
+from common import GAMES, MAX_NUM_PLAYERS
 
 HOSTNAME = "https://vods.co"
 MAX_RETRIES = 10
@@ -65,6 +49,7 @@ def extract_noscript_youtube_link(soup: bs4.BeautifulSoup) -> Optional[str]:
     """
     yt_anchor = soup.select_one(".submessage > a:nth-child(1)")
     if not yt_anchor:
+        logging.debug("Fallback YouTube iframe not present.")
         return None
     return yt_anchor.attrs["href"]
 
@@ -75,6 +60,7 @@ def extract_youtube_link(soup: bs4.BeautifulSoup) -> Optional[str]:
     """
     yt_iframe: bs4.element.Tag = soup.select_one("#g1-video")
     if not yt_iframe:
+        logging.debug("Default YouTube iframe not present")
         return extract_noscript_youtube_link(
             soup
         )  # Might be a <noscript> tag instead, use fallback
@@ -89,6 +75,7 @@ def extract_twitch_link(soup: bs4.BeautifulSoup) -> Optional[str]:
     """
     twitch_iframe: bs4.element.Tag = soup.select_one(".js-video > iframe:nth-child(1)")
     if not twitch_iframe:
+        logging.debug("Twitch iframe not present")
         return None
     parse_result: parse.ParseResult = parse.urlparse(twitch_iframe.attrs["src"])
     return parse.urlunparse(parse_result)
@@ -107,8 +94,8 @@ async def follow_vod_co_link(session: aiohttp.ClientSession, url: str) -> Option
         if link:
             return link
 
-    print(f"Found a VOD that was neither YT nor Twitch: {url}")
-    print(html)
+    logging.warning(f"No matching parser found for VOD '{url}'.")
+    # logging.debug(html)
     return None
 
 
@@ -140,7 +127,6 @@ async def fetch_data_for_vod_page(
     vod_entries: List[Optional[VODEntry]] = await asyncio.gather(
         *(process_row(session, row) for row in rows)
     )
-    print(f"Finished scraping {url}")
     return [entry for entry in vod_entries if entry is not None]
 
 
@@ -148,9 +134,9 @@ async def get_page_limit_for(game: str) -> int:
     """
     Makes a single request to figure out how many pages of VODs there are for this game.
     """
+    logging.info(f"Getting page limit for {game}")
     async with aiohttp.ClientSession() as session:
         page_number = 0
-        print(f"{HOSTNAME}/{game}?page={page_number}")
         html = await fetch(session, f"{HOSTNAME}/{game}?page={page_number}")
         last_page_link = bs4.BeautifulSoup(html, "lxml").select_one(
             ".pager-last > a:nth-child(1)"
@@ -172,10 +158,12 @@ async def consumer(queue: asyncio.Queue, session: aiohttp.ClientSession, writer)
     """
     while True:
         page_url = await queue.get()
+        logging.info(f"{page_url} removed from the queue.")
         vod_entries: List[VODEntry] = await fetch_data_for_vod_page(session, page_url)
         for (link, characters) in vod_entries:
             row = [link, *characters]
             writer.writerow(row)
+        logging.info(f"Finished scraping {page_url}")
         queue.task_done()  # indicate complete task
 
 
@@ -189,9 +177,10 @@ async def fetch_data_for(game: str, num_workers: int, upper_page_limit=None):
     queue = asyncio.Queue()
     for i in range(upper_page_limit):
         await queue.put(f"{HOSTNAME}/{game}?page={i}")
+    logging.info(f"Scraping {upper_page_limit} pages using {num_workers} workers.")
 
     async with aiohttp.ClientSession() as session:
-        with open(f"{game}-vods.csv", "w+") as csvfile:
+        with open(f"{game}-links.csv", "w+") as csvfile:
             writer = csv.writer(csvfile)
             consumers = [
                 asyncio.ensure_future(consumer(queue, session, writer))
@@ -200,7 +189,7 @@ async def fetch_data_for(game: str, num_workers: int, upper_page_limit=None):
             await queue.join()  # Wait until the queue is empty
 
             # Clean up the consumers.
-            print("Finished scraping, wrapping up.")
+            logging.info("Finished scraping, cleaning up consumers.")
             for cons in consumers:
                 cons.cancel()
 
@@ -217,6 +206,9 @@ def main():
     )
 
     args = parser.parse_args()
+    logging.basicConfig(level=logging.DEBUG)
+    logging.debug(f"Game selected: {args.game}")
+    logging.debug(f"Number of workers: {args.num_workers}")
     loop = asyncio.get_event_loop()
     loop.run_until_complete(fetch_data_for(args.game, args.num_workers))
 
