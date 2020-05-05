@@ -1,9 +1,7 @@
 import argparse
 import asyncio
-import concurrent
-import multiprocessing
 import re
-import urllib
+from urllib import parse
 from typing import Callable, List, NamedTuple, Optional
 import csv
 
@@ -80,11 +78,9 @@ def extract_youtube_link(soup: bs4.BeautifulSoup) -> Optional[str]:
         return extract_noscript_youtube_link(
             soup
         )  # Might be a <noscript> tag instead, use fallback
-    parse_result: urllib.parse.ParseResult = urllib.parse.urlparse(
-        yt_iframe.attrs["src"]
-    )
+    parse_result: parse.ParseResult = parse.urlparse(yt_iframe.attrs["src"])
     parse_result = parse_result._replace(scheme="https")._replace(query=None)
-    return urllib.parse.urlunparse(parse_result)
+    return parse.urlunparse(parse_result)
 
 
 def extract_twitch_link(soup: bs4.BeautifulSoup) -> Optional[str]:
@@ -94,15 +90,11 @@ def extract_twitch_link(soup: bs4.BeautifulSoup) -> Optional[str]:
     twitch_iframe: bs4.element.Tag = soup.select_one(".js-video > iframe:nth-child(1)")
     if not twitch_iframe:
         return None
-    parse_result: urllib.parse.ParseResult = urllib.parse.urlparse(
-        twitch_iframe.attrs["src"]
-    )
-    return urllib.parse.urlunparse(parse_result)
+    parse_result: parse.ParseResult = parse.urlparse(twitch_iframe.attrs["src"])
+    return parse.urlunparse(parse_result)
 
 
-async def follow_vod_co_link(
-    session: aiohttp.ClientSession, url: str, retries=0
-) -> Optional[str]:
+async def follow_vod_co_link(session: aiohttp.ClientSession, url: str) -> Optional[str]:
     """
     Attempts to get a direct link to a VOD. Currently-supported VOD links are: [YouTube, Twitch]. If a link cannot be extracted, returns None.
     """
@@ -138,7 +130,7 @@ async def process_row(
 
 
 async def fetch_data_for_vod_page(
-    session: aiohttp.ClientSession, url: str, retries=0
+    session: aiohttp.ClientSession, url: str
 ) -> List[VODEntry]:
     """
     Makes a request to the provided https://vods.co page.
@@ -168,8 +160,8 @@ async def get_page_limit_for(game: str) -> int:
                 f"Couldn't get the index of the last page for {game}. The site might be down."
             )
         last_page_href = last_page_link.attrs["href"]
-        parse_result: urllib.parse.ParseResult = urllib.parse.urlparse(last_page_href)
-        query_dict = urllib.parse.parse_qs(parse_result.query)
+        parse_result: parse.ParseResult = parse.urlparse(last_page_href)
+        query_dict = parse.parse_qs(parse_result.query)
         return int(query_dict["page"][0])
 
 
@@ -187,9 +179,7 @@ async def consumer(queue: asyncio.Queue, session: aiohttp.ClientSession, writer)
         queue.task_done()  # indicate complete task
 
 
-async def fetch_data_for(
-    game: str, num_workers: int, upper_page_limit=None
-) -> List[VODEntry]:
+async def fetch_data_for(game: str, num_workers: int, upper_page_limit=None):
     """
     Retrieves all VOD data for a specific Super Smash Bros. game
     """
