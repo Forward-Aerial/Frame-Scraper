@@ -42,7 +42,7 @@ async def fetch(session: aiohttp.ClientSession, url: str, retries=0) -> str:
     try:
         async with session.get(url) as response:
             return await response.text()
-    except aiohttp.client_exceptions.ServerDisconnectedError:
+    except (aiohttp.client_exceptions.ServerDisconnectedError, aiohttp.client_exceptions.ServerTimeoutError):
         if retries >= MAX_RETRIES:
             raise Exception(
                 f"Retried {MAX_RETRIES} times, could not successfully request {url}"
@@ -209,11 +209,12 @@ def main():
     parser.add_argument(
         "--num-workers",
         default=NUM_WORKERS,
+        type=int,
         help="The number of workers to use while scraping. Too many workers will cause the server to reject requests.",
     )
 
     args = parser.parse_args()
-    # logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(level=logging.INFO)
     logging.debug(f"Game selected: {args.game}")
     logging.debug(f"Number of workers: {args.num_workers}")
     loop = asyncio.get_event_loop()
