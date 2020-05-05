@@ -35,12 +35,19 @@ class VODEntry(NamedTuple):
     characters_used: List[str]
 
 
-async def fetch(session: aiohttp.ClientSession, url: str) -> str:
+async def fetch(session: aiohttp.ClientSession, url: str, retries=0) -> str:
     """
     Makes a request to the provided HTML, and returns the HTML.
     """
-    async with session.get(url) as response:
-        return await response.text()
+    try:
+        async with session.get(url) as response:
+            return await response.text()
+    except aiohttp.client_exceptions.ServerDisconnectedError:
+        if retries >= MAX_RETRIES:
+            raise Exception(
+                f"Retried {MAX_RETRIES} times, could not successfully request {url}"
+            )
+        return await fetch(session, url, retries + 1)
 
 
 def extract_noscript_youtube_link(soup: bs4.BeautifulSoup) -> Optional[str]:
@@ -206,11 +213,12 @@ def main():
     )
 
     args = parser.parse_args()
-    logging.basicConfig(level=logging.DEBUG)
+    # logging.basicConfig(level=logging.INFO)
     logging.debug(f"Game selected: {args.game}")
     logging.debug(f"Number of workers: {args.num_workers}")
     loop = asyncio.get_event_loop()
     loop.run_until_complete(fetch_data_for(args.game, args.num_workers))
+    loop.close()
 
 
 if __name__ == "__main__":
