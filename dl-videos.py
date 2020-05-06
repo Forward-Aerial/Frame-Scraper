@@ -3,7 +3,7 @@ import csv
 import os
 import multiprocessing
 from multiprocessing import dummy
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 
 import youtube_dl
 
@@ -20,26 +20,37 @@ YOUTUBE_DL_OPTS = {
 }
 
 
-def download_vod(link: str, *characters: List[str]) -> List[str]:
+def download_vod(link: str, *characters: List[str]) -> Optional[List[str]]:
     """
     Downloads the VOD located at the provided link, and returns the filename. Characters are not modified.
     """
-    with youtube_dl.YoutubeDL(YOUTUBE_DL_OPTS) as ydl:
-        info_dict = ydl.extract_info(link, download=True)
-        filename = ydl.prepare_filename(info_dict)
-        ydl.download([link])
-        return [filename, *characters]
+    try:
+        with youtube_dl.YoutubeDL(YOUTUBE_DL_OPTS) as ydl:
+            info_dict = ydl.extract_info(link, download=True)
+            filename = ydl.prepare_filename(info_dict)
+            ydl.download([link])
+            return [filename, *characters]
+    except youtube_dl.utils.DownloadError as e:
+        print("Hit an exception:", e)
+        return None
+
+
+def download_vod_args(args: List[str]) -> List[str]:
+    return download_vod(*args)
 
 
 def download_vods(game: str, csv_filename: str, num_processes: int):
     with open(csv_filename, "r") as in_csvfile:
+        reader = csv.reader(in_csvfile)
         with open(f"{game}-vods.csv", "w+") as out_csvfile:
             writer = csv.writer(out_csvfile)
-            reader = csv.reader(in_csvfile)
             with multiprocessing.Pool(processes=num_processes) as pool:
-                download_tasks = pool.starmap(download_vod, reader)
+                download_tasks = pool.imap_unordered(download_vod_args, reader)
                 for result in download_tasks:
+                    if not result:
+                        continue
                     writer.writerow(result)
+                    out_csvfile.flush()
 
 
 def main():

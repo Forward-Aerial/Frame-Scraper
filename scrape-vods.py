@@ -42,7 +42,10 @@ async def fetch(session: aiohttp.ClientSession, url: str, retries=0) -> str:
     try:
         async with session.get(url) as response:
             return await response.text()
-    except (aiohttp.client_exceptions.ServerDisconnectedError, aiohttp.client_exceptions.ServerTimeoutError):
+    except (
+        aiohttp.client_exceptions.ServerDisconnectedError,
+        aiohttp.client_exceptions.ServerTimeoutError,
+    ):
         if retries >= MAX_RETRIES:
             raise Exception(
                 f"Retried {MAX_RETRIES} times, could not successfully request {url}"
