@@ -14,7 +14,7 @@ from common import GAMES, MAX_NUM_PLAYERS
 HOSTNAME = "https://vods.co"
 MAX_RETRIES = 10
 
-NUM_WORKERS = 4
+NUM_WORKERS = 10
 
 SPRITE_FILENAME_PATTERN = re.compile(r"16px-(?P<charname>.*)$")
 
@@ -168,7 +168,7 @@ async def consumer(queue: asyncio.Queue, session: aiohttp.ClientSession, writer)
     """
     while True:
         page_url = await queue.get()
-        logging.info(f"{page_url} removed from the queue.")
+        logging.debug(f"{page_url} removed from the queue.")
         vod_entries: List[VODEntry] = await fetch_data_for_vod_page(session, page_url)
         for (link, characters) in vod_entries:
             row = [link, *characters]
