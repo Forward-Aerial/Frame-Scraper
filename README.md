@@ -1,5 +1,5 @@
-# Smash VOD DL
-A utility for downloading Super Smash Bros. Videos-On-Demand (VODs) of professional players.
+# Dataset Builder
+A utility for downloading Super Smash Bros. Videos-On-Demand of professional games, and splitting those games into frames.
 Sources data from https://vods.co.
 
 ## Running Locally
