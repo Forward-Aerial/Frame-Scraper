@@ -4,6 +4,7 @@
 
 ### Repo-specific ###
 data/
+.vscode
 *.csv
 
 ### PyCharm ###
