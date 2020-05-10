@@ -14,6 +14,7 @@ from common import GAMES, YOUTUBE_DL_OPTS
 FRAMES_OUTPUT_PER_SEC = 0.1
 MAX_FRAMES_PER_VOD = 200
 
+
 def split_vod_into_frames(
     youtube_link: str, fps: float, characters_used: List[str],
 ) -> List[Tuple[str, List[str]]]:
@@ -22,9 +23,7 @@ def split_vod_into_frames(
             info_dict = ydl.extract_info(youtube_link, download=False)
             filename = ydl.prepare_filename(info_dict)
             yt_id = filename.split("/")[-1].split(".")[0]
-        if not os.path.exists(f"data/images/{yt_id}"):
-            os.mkdir(f"data/images/{yt_id}")
-        
+
         # Create a new process, calling ffmpeg
         subprocess.check_call(
             [
@@ -33,14 +32,14 @@ def split_vod_into_frames(
                 "-i",
                 filename,
                 "-r",
-                str(fps), # Take one frame every 1/fps seconds
-                "-loglevel", # Mute a lot of the output, it clogs up the display
+                str(fps),  # Take one frame every 1/fps seconds
+                "-loglevel",  # Mute a lot of the output, it clogs up the display
                 "quiet",
-                "-stats", # Leave the stats though, those are helpful
-                f"data/images/{yt_id}/{yt_id}.%03d.jpg",
+                "-stats",  # Leave the stats though, those are helpful
+                f"data/images/{yt_id}.%03d.jpg",
             ]
         )
-        created_frames = glob.glob(f"data/images/{yt_id}/*")
+        created_frames = glob.glob(f"data/images/{yt_id}*")
         if len(created_frames) >= MAX_FRAMES_PER_VOD:
             sampled_frames = random.sample(created_frames, MAX_FRAMES_PER_VOD)
             for frame in created_frames:
@@ -60,6 +59,7 @@ def split_vod_into_frames_args(args) -> List[Tuple[str, float, List[str]]]:
 def main(game: str, in_filename: str, num_processes: int, fps: float):
     with open(in_filename, "r") as in_csvfile:
         reader = csv.reader(in_csvfile)
+        next(reader)  # Skip header row
         with open(f"{game}-vod-frames.csv", "w+") as out_csvfile:
             writer = csv.writer(out_csvfile)
             with dummy.Pool(processes=num_processes) as pool:

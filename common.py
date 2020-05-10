@@ -19,6 +19,8 @@ GAMES = [
 
 MAX_NUM_PLAYERS = 8
 
+COLUMN_NAMES = ["link", *[f"character_{i+1}" for i in range(MAX_NUM_PLAYERS)]]
+
 FORMAT = "134"
 YOUTUBEDL_OUT_TEMPLATE = "data/videos/%(id)s.%(ext)s"
 MAX_DURATION = 15 * 60

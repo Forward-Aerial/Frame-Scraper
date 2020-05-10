@@ -9,12 +9,12 @@ import csv
 import aiohttp
 import bs4
 
-from common import GAMES, MAX_NUM_PLAYERS
+from common import GAMES, MAX_NUM_PLAYERS, COLUMN_NAMES
 
 HOSTNAME = "https://vods.co"
 MAX_RETRIES = 10
 
-NUM_WORKERS = 10
+NUM_WORKERS = 4
 
 SPRITE_FILENAME_PATTERN = re.compile(r"16px-(?P<charname>.*)$")
 
@@ -192,6 +192,7 @@ async def fetch_data_for(game: str, num_workers: int, upper_page_limit=None):
     async with aiohttp.ClientSession() as session:
         with open(f"{game}-links.csv", "w+") as csvfile:
             writer = csv.writer(csvfile)
+            writer.writerow(COLUMN_NAMES)
             consumers = [
                 asyncio.ensure_future(consumer(queue, session, writer))
                 for _ in range(num_workers)

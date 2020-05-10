@@ -6,7 +6,8 @@ import os
 import random
 import subprocess
 from multiprocessing import dummy
-from typing import List, Optional, Tuple, NamedTuple
+from typing import List, Optional, Tuple
+import logging
 
 import pandas as pd
 import youtube_dl
@@ -38,7 +39,7 @@ def download_vod(
             filename = ydl.prepare_filename(info_dict)
             return (filename, *characters)
     except youtube_dl.utils.DownloadError as e:
-        print("Hit an exception:", e)
+        logging.fatal(f"Hit an exception downloading {link}:")
         return None
 
 
@@ -50,15 +51,23 @@ def download_vods(
     game: str, csv_filename: str, num_processes: int, samples: Optional[int],
 ):
     if samples is not None:
+        logging.info(f"Taking a sample (size {samples}) from {csv_filename}")
         df = pd.read_csv(csv_filename)
-        df = df.sample(samples)
-        new_filename = f"{game}-vods-sample-{samples}.csv"
-        df.to_csv(new_filename, index=False, header=False)
-        csv_filename = new_filename
+        if samples > df.shape[0]:
+            logging.warning(
+                f"Provided sample was larger than the CSV. Not taking a sample."
+            )
+        else:
+            df = df.sample(samples)
+            new_filename = f"{game}-links-sample-{samples}.csv"
+            df.to_csv(new_filename, index=False)
+            logging.info(f"Wrote samples to CSV named {new_filename}")
+            csv_filename = new_filename
 
     with open(csv_filename, "r") as in_csvfile:
         reader = csv.reader(in_csvfile)
-        with open(f"{game}-vods.csv", "w+") as out_csvfile:
+        next(reader)
+        with open(csv_filename.replace("links", "vods"), "w+") as out_csvfile:
             writer = csv.writer(out_csvfile)
             with multiprocessing.Pool(processes=num_processes) as pool:
                 download_tasks = pool.imap_unordered(download_vod_args, reader)
