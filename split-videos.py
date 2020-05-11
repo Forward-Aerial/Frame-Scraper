@@ -11,19 +11,21 @@ import youtube_dl
 
 from common import GAMES, YOUTUBE_DL_OPTS
 
-FRAMES_OUTPUT_PER_SEC = 0.1
+FRAMES_OUTPUT_PER_SEC = 0.2
 MAX_FRAMES_PER_VOD = 200
 
 
 def split_vod_into_frames(
-    youtube_link: str, fps: float, characters_used: List[str],
+    filename: str, fps: float, characters_used: List[str],
 ) -> List[Tuple[str, List[str]]]:
+    if not os.path.exists(filename):
+        print(f"Couldn't find {filename} in the videos directory. Skipping it.")
+        return []
     try:
-        with youtube_dl.YoutubeDL(YOUTUBE_DL_OPTS) as ydl:
-            info_dict = ydl.extract_info(youtube_link, download=False)
-            filename = ydl.prepare_filename(info_dict)
-            yt_id = filename.split("/")[-1].split(".")[0]
-
+        yt_id = filename.split("/")[-1].split(".")[0]
+        folder_name = f"data/images/{yt_id}"
+        if not os.path.exists(folder_name):
+            os.mkdir(folder_name)
         # Create a new process, calling ffmpeg
         subprocess.check_call(
             [
@@ -36,10 +38,10 @@ def split_vod_into_frames(
                 "-loglevel",  # Mute a lot of the output, it clogs up the display
                 "quiet",
                 "-stats",  # Leave the stats though, those are helpful
-                f"data/images/{yt_id}.%03d.jpg",
+                f"data/images/{yt_id}/%03d.jpg",
             ]
         )
-        created_frames = glob.glob(f"data/images/{yt_id}*")
+        created_frames = glob.glob(f"data/images/{yt_id}/*")
         if len(created_frames) >= MAX_FRAMES_PER_VOD:
             sampled_frames = random.sample(created_frames, MAX_FRAMES_PER_VOD)
             for frame in created_frames:
@@ -57,6 +59,8 @@ def split_vod_into_frames_args(args) -> List[Tuple[str, float, List[str]]]:
 
 
 def main(game: str, in_filename: str, num_processes: int, fps: float):
+    if not os.path.exists("data/images"):
+        os.mkdir("data/images")
     with open(in_filename, "r") as in_csvfile:
         reader = csv.reader(in_csvfile)
         next(reader)  # Skip header row
@@ -64,8 +68,8 @@ def main(game: str, in_filename: str, num_processes: int, fps: float):
             writer = csv.writer(out_csvfile)
             with dummy.Pool(processes=num_processes) as pool:
                 args = [
-                    (youtube_link, fps, characters_used)
-                    for (youtube_link, *characters_used) in reader
+                    (filename, fps, characters_used)
+                    for (filename, *characters_used) in reader
                 ]
                 print(len(args))
                 split_tasks = pool.imap_unordered(split_vod_into_frames_args, args,)
