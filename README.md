@@ -1,4 +1,4 @@
-# Dataset Builder
+# Frame Scraper
 A utility for downloading Super Smash Bros. Videos-On-Demand of professional games, and splitting those games into frames.
 Sources data from https://vods.co.
 
