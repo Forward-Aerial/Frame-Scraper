@@ -11,7 +11,7 @@ click==7.1.2
 idna==2.9
 isort==4.3.21
 lazy-object-proxy==1.4.3
-lxml==4.5.0
+lxml==4.6.2
 mccabe==0.6.1
 multidict==4.7.5
 numpy==1.18.4
